@@ -17,9 +17,12 @@ import {
   Terminal,
 } from "lucide-react";
 
-import { useState } from "react";
-import { useEffect } from "react";
 import { testSupabaseConnection } from "./lib/testSupabase";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import AdminLogin from "./pages/AdminLogin";
+import AdminDashboard from "./pages/AdminDashboard";
+import { supabase } from "./lib/supabase";
+import { useEffect, useState } from "react";
 
 
 const skills = [
@@ -33,40 +36,7 @@ const skills = [
   { name: "Tailwind CSS", level: "Frontend" },
 ];
 
-const projects = [
-  {
-    number: "01",
-    title: "JandaWatch",
-    description:
-      "A concept for monitoring forex trading sessions and helping traders stay informed about market activity.",
-    technologies: ["React", "JavaScript", "Supabase"],
-    icon: Monitor,
-    color: "from-blue-500/20 to-cyan-500/5",
-    status: "In development",
-  },
-  {
-    number: "02",
-    title: "Portfolio Website",
-    description:
-      "A personal portfolio designed to showcase my skills, projects, education, and software development journey.",
-    technologies: ["React", "Tailwind CSS", "Node.js"],
-    icon: Code2,
-    color: "from-violet-500/20 to-blue-500/5",
-    status: "In development",
-  },
-  {
-    number: "03",
-    title: "Full-Stack Web App",
-    description:
-      "A web application concept focused on authentication, database management, and responsive user interfaces.",
-    technologies: ["React", "Express", "MySQL"],
-    icon: Database,
-    color: "from-emerald-500/20 to-teal-500/5",
-    status: "Practice project",
-  },
-];
-
-function App() {
+function PortfolioHome()  {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
@@ -80,7 +50,39 @@ function App() {
   ];
   useEffect(() => {
   testSupabaseConnection();
-}, []);lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+}, []);
+
+const [projects, setProjects] = useState([]);
+const [projectsLoading, setProjectsLoading] = useState(true);
+const [projectsError, setProjectsError] = useState("");
+
+useEffect(() => {
+  async function loadProjects() {
+    setProjectsLoading(true);
+    setProjectsError("");
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select(
+        "id, title, description, image_url, project_url, github_url, technologies, published, display_order, created_at"
+      )
+      .eq("published", true)
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to load portfolio projects:", error);
+      setProjectsError("Projects could not be loaded right now.");
+      setProjects([]);
+    } else {
+      setProjects(data ?? []);
+    }
+
+    setProjectsLoading(false);
+  }
+
+  loadProjects();
+}, []);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
@@ -119,12 +121,24 @@ function App() {
             ))}
           </div>
 
-          <a
-            href="#contact"
-            className="hidden rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600 md:inline-flex"
-          >
-            Let's Talk
-          </a>
+          
+<div className="hidden items-center gap-3 md:flex">
+  <a
+    href="/admin/login"
+    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-blue-500 hover:text-blue-400"
+  >
+    <User size={17} />
+    Admin Login
+  </a>
+
+  <a
+    href="#contact"
+    className="rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600"
+  >
+    Let's Talk
+  </a>
+</div>
+
 
           <button
             type="button"
@@ -148,7 +162,18 @@ function App() {
                   >
                     {link.label}
                   </a>
+                  
                 ))}
+                
+<a
+  href="/admin/login"
+  onClick={closeMenu}
+  className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-3 font-semibold text-blue-400 transition hover:border-blue-500 hover:bg-slate-900"
+>
+  <User size={18} />
+  Admin Login
+</a>
+
               </div>
             </div>
           )}
@@ -399,83 +424,143 @@ function App() {
         </section>
 
         {/* Projects */}
-        <section
-          id="projects"
-          className="scroll-mt-24 border-y border-white/5 bg-slate-900/40"
-        >
-          <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8">
-            <div className="mb-12 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-              <div>
-                <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-blue-400">
-                  Selected Work
-                </p>
-                <h2 className="text-3xl font-bold sm:text-4xl">
-                  Projects & experiments
-                </h2>
-                <p className="mt-4 max-w-2xl leading-7 text-slate-400">
-                  A look at the applications I am building and the ideas
-                  I am exploring.
-                </p>
+        
+<section
+  id="projects"
+  className="scroll-mt-24 border-y border-white/5 bg-slate-900/40"
+>
+  <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8">
+    <div className="mb-12 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <div>
+        <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-blue-400">
+          Selected Work
+        </p>
+        <h2 className="text-3xl font-bold sm:text-4xl">
+          Projects &amp; experiments
+        </h2>
+        <p className="mt-4 max-w-2xl leading-7 text-slate-400">
+          A look at the applications I am building and the ideas I am exploring.
+        </p>
+      </div>
+
+      <span className="text-sm text-slate-500">
+        Learning through building
+      </span>
+    </div>
+
+    {projectsLoading ? (
+      <div className="py-12 text-center text-slate-400">
+        Loading projects...
+      </div>
+    ) : projectsError ? (
+      <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-center text-red-300">
+        {projectsError}
+      </div>
+    ) : projects.length === 0 ? (
+      <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center">
+        <h3 className="text-lg font-semibold text-white">
+          Projects coming soon
+        </h3>
+        <p className="mt-2 text-slate-400">
+          New projects will appear here when they are published.
+        </p>
+      </div>
+    ) : (
+      <div className="grid gap-6 lg:grid-cols-3">
+        {projects.map((project, index) => {
+          const ProjectIcon = [Monitor, Code2, Database][index % 3];
+
+          const colors = [
+            "from-blue-500/20 to-cyan-500/5",
+            "from-violet-500/20 to-blue-500/5",
+            "from-emerald-500/20 to-teal-500/5",
+          ];
+
+          return (
+            <article
+              key={project.id}
+              className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 transition hover:-translate-y-1 hover:border-slate-700"
+            >
+              <div
+                className={`relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br ${colors[index % colors.length]}`}
+              >
+                <span className="absolute left-5 top-5 font-mono text-sm text-slate-400">
+                  / {String(index + 1).padStart(2, "0")}
+                </span>
+
+                {project.image_url ? (
+                  <img
+                    src={project.image_url}
+                    alt={project.title}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 text-blue-400 shadow-2xl transition group-hover:scale-110">
+                    <ProjectIcon size={36} />
+                  </div>
+                )}
               </div>
-              <span className="text-sm text-slate-500">
-                Learning through building
-              </span>
-            </div>
 
-            <div className="grid gap-6 lg:grid-cols-3">
-              {projects.map((project) => {
-                const ProjectIcon = project.icon;
+              <div className="p-6">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-xl font-bold">
+                    {project.title}
+                  </h3>
 
-                return (
-                  <article
-                    key={project.number}
-                    className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 transition hover:-translate-y-1 hover:border-slate-700"
-                  >
-                    <div
-                      className={`relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br ${project.color}`}
+                  <span className="rounded-full border border-emerald-500/20 px-2.5 py-1 text-xs text-emerald-400">
+                    Published
+                  </span>
+                </div>
+
+                <p className="min-h-20 leading-7 text-slate-400">
+                  {project.description}
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {(project.technologies ?? []).map((technology) => (
+                    <span
+                      key={technology}
+                      className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-blue-300"
                     >
-                      <span className="absolute left-5 top-5 font-mono text-sm text-slate-400">
-                        / {project.number}
-                      </span>
-                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 text-blue-400 shadow-2xl transition group-hover:scale-110">
-                        <ProjectIcon size={36} />
-                      </div>
-                    </div>
+                      {technology}
+                    </span>
+                  ))}
+                </div>
 
-                    <div className="p-6">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="text-xl font-bold">{project.title}</h3>
-                        <span className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400">
-                          {project.status}
-                        </span>
-                      </div>
+                {(project.project_url || project.github_url) && (
+                  <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-slate-800 pt-5 text-sm">
+                    {project.project_url && (
+                      <a
+                        href={project.project_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-blue-400 transition hover:text-blue-300"
+                      >
+                        View Project ↗
+                      </a>
+                    )}
 
-                      <p className="min-h-20 leading-7 text-slate-400">
-                        {project.description}
-                      </p>
-
-                      <div className="mt-5 flex flex-wrap gap-2">
-                        {project.technologies.map((technology) => (
-                          <span
-                            key={technology}
-                            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-blue-300"
-                          >
-                            {technology}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="mt-6 flex items-center gap-2 border-t border-slate-800 pt-5 text-sm text-slate-500">
-                        <Code2 size={16} />
-                        <span>Project details coming soon</span>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+                    {project.github_url && (
+                      <a
+                        href={project.github_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-slate-300 transition hover:text-white"
+                      >
+                        GitHub ↗
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</section>
 
         {/* Contact */}
         <section id="contact" className="scroll-mt-24 mx-auto max-w-5xl px-6 py-24 text-center lg:px-8">
@@ -521,6 +606,19 @@ function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<PortfolioHome />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="*" element={<PortfolioHome />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
