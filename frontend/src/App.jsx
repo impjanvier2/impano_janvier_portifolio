@@ -80,7 +80,7 @@ function App() {
   ];
   useEffect(() => {
   testSupabaseConnection();
-}, []);
+}, []);lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
