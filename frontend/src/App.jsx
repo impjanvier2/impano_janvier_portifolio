@@ -86,6 +86,7 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+    <h1>MBERE YUKO UGEREKAHO IBYAHA UMUNTU UJYE UBANZA UMENYE INYUNGU YABA ABIFITEMO GXL </h1>
       {/* Background decoration */}
       <div className="pointer-events-none fixed inset-0 -z-0 overflow-hidden">
         <div className="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl" />
