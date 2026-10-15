@@ -86,7 +86,6 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
-    <h1>MBERE YUKO UGEREKAHO IBYAHA UMUNTU UJYE UBANZA UMENYE INYUNGU YABA ABIFITEMO GXL </h1>
       {/* Background decoration */}
       <div className="pointer-events-none fixed inset-0 -z-0 overflow-hidden">
         <div className="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl" />
@@ -105,7 +104,7 @@ useEffect(() => {
               IJ
             </div>
             <div>
-              <p className="font-bold tracking-tight">Impano Janvier</p>
+              <p className="font-bold tracking-tight">IMPANO Janvier</p>
               <p className="text-xs text-slate-400">Software Developer</p>
             </div>
           </a>
@@ -198,7 +197,7 @@ useEffect(() => {
             </p>
 
             <h1 className="max-w-2xl text-5xl font-bold leading-tight tracking-tight sm:text-6xl lg:text-7xl">
-              I'm Impano
+              I'm IMPANO
               <span className="block bg-gradient-to-r from-blue-400 via-cyan-300 to-violet-400 bg-clip-text text-transparent">
                 Janvier.
               </span>
@@ -296,7 +295,7 @@ useEffect(() => {
                     <p>
                       <span className="text-cyan-300">name</span>:{" "}
                       <span className="text-emerald-300">
-                        "Impano Janvier"
+                        "IMPANO Janvier"
                       </span>
                       ,
                     </p>
