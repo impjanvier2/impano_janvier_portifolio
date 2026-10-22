@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
@@ -67,7 +66,7 @@ function getStoragePath(imageUrl) {
 
     const path = decodeURIComponent(encodedPath);
 
-    // Ntukemere inzira zishobora gusohoka muri bucket.
+    // Reject paths that could escape the bucket
     if (
       path.startsWith("/") ||
       path.split("/").some(
@@ -86,7 +85,7 @@ function getStoragePath(imageUrl) {
 function getErrorMessage(error) {
   return error instanceof Error
     ? error.message
-    : "Habaye ikibazo kitazwi.";
+    : "An unknown error occurred.";
 }
 
 export default function AdminDashboard() {
@@ -108,8 +107,8 @@ export default function AdminDashboard() {
   const [imageWarning, setImageWarning] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  // Preview ikorwa n'ifoto yatoranyijwe.
-  // URL ya blob ihita isibwa iyo ifoto ihindutse cyangwa component ifunze.
+  // Preview is generated from the selected image.
+  // The blob URL is revoked when the image changes or the component unmounts.
   useEffect(() => {
     if (!selectedImage) {
       setImagePreview(form.image_url.trim());
@@ -134,7 +133,7 @@ export default function AdminDashboard() {
       .order("created_at", { ascending: false });
 
     if (queryError) {
-      setError(`Ntibyashobotse gusoma projects: ${queryError.message}`);
+      setError(`Failed to load projects: ${queryError.message}`);
       return false;
     }
 
@@ -176,7 +175,7 @@ export default function AdminDashboard() {
       } catch (err) {
         if (active) {
           setError(
-            `Ntibyashobotse gufungura Dashboard: ${getErrorMessage(err)}`
+            `Failed to open Dashboard: ${getErrorMessage(err)}`
           );
         }
       } finally {
@@ -256,19 +255,19 @@ export default function AdminDashboard() {
     setImageWarning("");
 
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-      setError("Hitamo ifoto ya JPG, PNG cyangwa WebP gusa.");
+      setError("Please choose a JPG, PNG or WebP image only.");
       input.value = "";
       return;
     }
 
     if (file.size === 0) {
-      setError("Iyi file nta makuru ayirimo. Hitamo indi foto.");
+      setError("This file is empty. Please choose another image.");
       input.value = "";
       return;
     }
 
     if (file.size > MAX_IMAGE_SIZE) {
-      setError("Ifoto igomba kuba itarengeje 5 MB.");
+      setError("The image must be no larger than 5 MB.");
       input.value = "";
       return;
     }
@@ -288,11 +287,11 @@ export default function AdminDashboard() {
   async function removeStorageImage(imageUrl) {
     const path = getStoragePath(imageUrl);
 
-    // Ntugerageze gusiba URL yo hanze cyangwa iyindi bucket.
+    // Never attempt to delete external URLs or images from other buckets.
     if (!path) {
       return {
         removed: false,
-        reason: "URL ntabwo ari iya bucket yacu.",
+        reason: "The URL does not belong to our bucket.",
       };
     }
 
@@ -320,13 +319,13 @@ export default function AdminDashboard() {
     setImageWarning("");
 
     if (!form.title.trim()) {
-      setError("Andika izina rya project.");
+      setError("Please enter a project title.");
       return;
     }
 
     if (selectedImage) {
       if (!ALLOWED_IMAGE_TYPES.has(selectedImage.type)) {
-        setError("Hitamo JPG, PNG cyangwa WebP gusa.");
+        setError("Please choose a JPG, PNG or WebP image only.");
         return;
       }
 
@@ -334,7 +333,7 @@ export default function AdminDashboard() {
         selectedImage.size === 0 ||
         selectedImage.size > MAX_IMAGE_SIZE
       ) {
-        setError("Ifoto igomba kuba iri hagati ya 1 byte na 5 MB.");
+        setError("The image must be between 1 byte and 5 MB.");
         return;
       }
     }
@@ -342,7 +341,7 @@ export default function AdminDashboard() {
     const order = Number(form.display_order);
 
     if (!Number.isSafeInteger(order) || order < 0) {
-      setError("Display order igomba kuba umubare utari munsi ya 0.");
+      setError("Display order must be a whole number that is not less than 0.");
       return;
     }
 
@@ -364,7 +363,7 @@ export default function AdminDashboard() {
       const oldImageUrl = form.image_url.trim() || null;
       let imageUrl = oldImageUrl;
 
-      // 1. Banza wohereze ifoto nshya.
+      // 1. Upload the new image first.
       if (selectedImage) {
         const extensionByType = {
           "image/jpeg": "jpg",
@@ -374,7 +373,7 @@ export default function AdminDashboard() {
 
         const extension = extensionByType[selectedImage.type];
 
-        // Izina ryihariye rigabanya amahirwe yo kugongana.
+        // A unique name reduces the chance of collisions.
         const randomId = crypto.randomUUID();
         uploadedPath = `${randomId}.${extension}`;
 
@@ -396,7 +395,7 @@ export default function AdminDashboard() {
         imageUrl = uploadedUrl;
       }
 
-      // 2. Bika project muri database.
+      // 2. Save the project to the database.
       const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
@@ -428,8 +427,8 @@ export default function AdminDashboard() {
 
       if (result.error) throw result.error;
 
-      // 3. Database yemeje ko project yabitswe.
-      // Noneho ni bwo dusiba ifoto ya kera.
+      // 3. The database confirmed the project was saved.
+      // Only now do we delete the old image.
       if (
         selectedImage &&
         oldImageUrl &&
@@ -442,7 +441,7 @@ export default function AdminDashboard() {
 
           if (!removal.removed) {
             setImageWarning(
-              `Project yabitswe neza, ariko ifoto ya kera ntiyasibwe: ${removal.reason}`
+              `Project saved successfully, but the old image was not deleted: ${removal.reason}`
             );
           }
         }
@@ -450,20 +449,20 @@ export default function AdminDashboard() {
 
       setNotice(
         editingId
-          ? "Project yahinduwe neza."
-          : "Project nshya yongeweho neza."
+          ? "Project updated successfully."
+          : "New project added successfully."
       );
 
       setFormOpen(false);
       resetForm();
 
-      // Niba refresh yanze, project iba yamaze kubikwa.
+      // Even if the refresh fails, the project is already saved.
       await loadProjects();
     } catch (err) {
-      setError(`Kubika project byanze: ${getErrorMessage(err)}`);
+      setError(`Failed to save project: ${getErrorMessage(err)}`);
 
-      // Database yanze? Gerageza gusiba ifoto nshya
-      // kugira ngo itazasigara idafite project iyikoresha.
+      // Did the database insert fail? Try to delete the new upload
+      // so it does not remain orphaned in storage.
       if (uploadedPath) {
         const { error: cleanupError } = await supabase.storage
           .from(BUCKET)
@@ -471,7 +470,7 @@ export default function AdminDashboard() {
 
         if (cleanupError) {
           setImageWarning(
-            `Project ntiyabitswe kandi isuku y'ifoto nshya nayo yanze: ${cleanupError.message}. Reba Storage.`
+            `Project was not saved, and cleanup of the new image also failed: ${cleanupError.message}. Check Storage.`
           );
         }
       }
@@ -502,7 +501,7 @@ export default function AdminDashboard() {
         .single();
 
       if (updateError) throw updateError;
-      if (!data) throw new Error("Nta project yahinduwe.");
+      if (!data) throw new Error("No project was updated.");
 
       setProjects((current) =>
         current.map((item) =>
@@ -514,11 +513,11 @@ export default function AdminDashboard() {
 
       setNotice(
         newPublishedStatus
-          ? "Project yatangajwe ku rubuga."
-          : "Project yahishwe ku rubuga."
+          ? "Project published on the site."
+          : "Project hidden from the site."
       );
     } catch (err) {
-      setError(`Guhindura status byanze: ${getErrorMessage(err)}`);
+      setError(`Failed to change status: ${getErrorMessage(err)}`);
     } finally {
       setPublishingId(null);
     }
@@ -528,7 +527,7 @@ export default function AdminDashboard() {
     if (deletingId || saving || publishingId) return;
 
     const confirmed = window.confirm(
-      `Uremeza ko ushaka gusiba "${project.title}"? Iki gikorwa ntigisubizwa inyuma.`
+      `Are you sure you want to delete "${project.title}"? This action cannot be undone.`
     );
 
     if (!confirmed) return;
@@ -538,7 +537,7 @@ export default function AdminDashboard() {
     setDeletingId(project.id);
 
     try {
-      // 1. Banza usibe row muri database.
+      // 1. Delete the row from the database first.
       const { data, error: deleteError } = await supabase
         .from("projects")
         .delete()
@@ -549,7 +548,7 @@ export default function AdminDashboard() {
 
       if (!data || data.length === 0) {
         throw new Error(
-          "Project ntiyasibwe. Reba uburenganzira bwa admin muri RLS."
+          "Project was not deleted. Check the admin permissions in RLS."
         );
       }
 
@@ -557,20 +556,20 @@ export default function AdminDashboard() {
         current.filter((item) => item.id !== project.id)
       );
 
-      setNotice("Project yasibwe muri database.");
+      setNotice("Project deleted from the database.");
 
-      // 2. Nyuma ni bwo dusiba ifoto yayo, niba ari iyacu.
+      // 2. Only after that do we delete its image, if it belongs to us.
       if (project.image_url) {
         const removal = await removeStorageImage(project.image_url);
 
         if (!removal.removed && getStoragePath(project.image_url)) {
           setImageWarning(
-            `Project yasibwe, ariko ifoto yo muri Storage yagumyeho: ${removal.reason}`
+            `Project deleted, but the image in Storage remains: ${removal.reason}`
           );
         }
       }
     } catch (err) {
-      setError(`Gusiba project byanze: ${getErrorMessage(err)}`);
+      setError(`Failed to delete project: ${getErrorMessage(err)}`);
     } finally {
       setDeletingId(null);
     }
@@ -603,7 +602,7 @@ export default function AdminDashboard() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">
         <LoaderCircle className="mr-3 animate-spin" />
-        Turimo gufungura Dashboard...
+        Opening Dashboard...
       </div>
     );
   }
@@ -637,7 +636,7 @@ export default function AdminDashboard() {
           className="mt-6 flex w-full items-center gap-3 rounded-xl border border-slate-700 px-4 py-3 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
         >
           <LogOut size={18} />
-          Sohoka
+          Log out
         </button>
       </aside>
 
@@ -649,7 +648,7 @@ export default function AdminDashboard() {
             </p>
             <h1 className="mt-2 text-3xl font-bold">Projects</h1>
             <p className="mt-2 text-sm text-slate-400">
-              Ongeramo, hindura, tangaza cyangwa uhagarike projects.
+              Add, edit, publish or unpublish projects.
             </p>
           </div>
 
@@ -668,7 +667,7 @@ export default function AdminDashboard() {
             role="alert"
             className="mt-6 break-words rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300"
           >
-            <strong>Ikosa:</strong> {error}
+            <strong>Error:</strong> {error}
           </div>
         )}
 
@@ -692,7 +691,7 @@ export default function AdminDashboard() {
 
         <section className="mt-8 grid gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">Projects zose</p>
+            <p className="text-sm text-slate-400">All projects</p>
             <p className="mt-2 text-3xl font-bold">{projects.length}</p>
           </div>
 
@@ -715,14 +714,14 @@ export default function AdminDashboard() {
           <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5 md:p-7">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-bold">
-                {editingId ? "Hindura Project" : "Ongeramo Project"}
+                {editingId ? "Edit Project" : "Add Project"}
               </h2>
 
               <button
                 type="button"
                 onClick={closeForm}
                 disabled={saving}
-                aria-label="Funga form"
+                aria-label="Close form"
                 className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
               >
                 <X size={20} />
@@ -743,7 +742,7 @@ export default function AdminDashboard() {
                   onChange={updateField}
                   required
                   maxLength={150}
-                  placeholder="Urugero: JandaWatch"
+                  placeholder="e.g. JandaWatch"
                   disabled={saving}
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
                 />
@@ -775,7 +774,7 @@ export default function AdminDashboard() {
                   value={form.description}
                   onChange={updateField}
                   disabled={saving}
-                  placeholder="Sobanura icyo project ikora..."
+                  placeholder="Describe what the project does..."
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
                 />
               </div>
@@ -792,10 +791,10 @@ export default function AdminDashboard() {
                   <div className="flex flex-col items-center gap-3 py-3 text-center">
                     <ImagePlus size={34} className="text-blue-400" />
                     <p className="font-medium">
-                      Hitamo ifoto ya project
+                      Choose a project image
                     </p>
                     <p className="text-xs text-slate-400">
-                      JPG, PNG cyangwa WebP · Ntirenze 5 MB
+                      JPG, PNG or WebP · No more than 5 MB
                     </p>
 
                     <input
@@ -812,11 +811,11 @@ export default function AdminDashboard() {
                     <div className="mt-4 overflow-hidden rounded-xl border border-slate-700">
                       <img
                         src={imagePreview}
-                        alt={`Preview ya ${form.title || "project"}`}
+                        alt={`Preview of ${form.title || "project"}`}
                         className="max-h-80 w-full bg-slate-900 object-contain"
                         onError={() =>
                           setError(
-                            "Ifoto ntiyashoboye kwerekanwa. Hitamo indi foto cyangwa genzura URL."
+                            "The image could not be displayed. Choose another image or check the URL."
                           )
                         }
                       />
@@ -826,7 +825,7 @@ export default function AdminDashboard() {
                           <p className="break-all text-sm font-medium text-slate-200">
                             {selectedImage
                               ? selectedImage.name
-                              : "Ifoto isanzwe"}
+                              : "Current image"}
                           </p>
 
                           {selectedImage && (
@@ -847,14 +846,14 @@ export default function AdminDashboard() {
                             disabled={saving}
                             className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
                           >
-                            Kuraho ifoto nshya
+                            Remove new image
                           </button>
                         )}
                       </div>
                     </div>
                   ) : (
                     <p className="mt-3 text-center text-sm text-slate-500">
-                      Nta foto wahisemo.
+                      No image selected.
                     </p>
                   )}
                 </div>
@@ -874,8 +873,8 @@ export default function AdminDashboard() {
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  Iyo uhisemo ifoto nshya, ni yo izakoreshwa.
-                  Niba ushaka gukoresha URL, banza ukureho ifoto nshya wahisemo.
+                  If you select a new image, it will be used instead.
+                  To use a URL, first remove the new image you selected.
                 </p>
               </div>
 
@@ -922,7 +921,7 @@ export default function AdminDashboard() {
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  Tandukanya technologies ukoresheje koma.
+                  Separate technologies with commas.
                 </p>
               </div>
 
@@ -940,7 +939,7 @@ export default function AdminDashboard() {
                     Publish project
                   </span>
                   <span className="mt-1 block text-sm text-slate-400">
-                    Project izagaragara kuri portfolio.
+                    The project will appear on the portfolio.
                   </span>
                 </span>
               </label>
@@ -960,10 +959,10 @@ export default function AdminDashboard() {
                     <Save size={18} />
                   )}
                   {saving
-                    ? "Turimo kubika..."
+                    ? "Saving..."
                     : editingId
-                      ? "Bika impinduka"
-                      : "Ongeramo Project"}
+                      ? "Save changes"
+                      : "Add Project"}
                 </button>
 
                 <button
@@ -982,7 +981,7 @@ export default function AdminDashboard() {
         <section className="mt-8">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-xl font-bold">
-              Projects ziri muri database
+              Projects in the database
             </h2>
 
             <button
@@ -1005,10 +1004,10 @@ export default function AdminDashboard() {
                 size={36}
               />
               <h3 className="mt-4 font-semibold">
-                Nta projects zirimo
+                No projects yet
               </h3>
               <p className="mt-2 text-sm text-slate-400">
-                Kanda New Project kugira ngo wongere project ya mbere.
+                Click New Project to add your first project.
               </p>
             </div>
           ) : (
@@ -1060,7 +1059,7 @@ export default function AdminDashboard() {
 
                     <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-400">
                       {project.description ||
-                        "Nta bisobanuro birashyirwaho."}
+                        "No description provided."}
                     </p>
 
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -1081,7 +1080,7 @@ export default function AdminDashboard() {
                         className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm hover:border-blue-500 disabled:opacity-50"
                       >
                         <Pencil size={15} />
-                        Hindura
+                        Edit
                       </button>
 
                       <button
@@ -1103,7 +1102,7 @@ export default function AdminDashboard() {
                         ) : (
                           <Eye size={15} />
                         )}
-                        {project.published ? "Hisha" : "Publish"}
+                        {project.published ? "Hide" : "Publish"}
                       </button>
 
                       {project.project_url && (
@@ -1147,7 +1146,7 @@ export default function AdminDashboard() {
                         ) : (
                           <Trash2 size={15} />
                         )}
-                        Siba
+                        Delete
                       </button>
                     </div>
                   </div>
