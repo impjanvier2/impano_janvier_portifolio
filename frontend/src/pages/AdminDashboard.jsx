@@ -4,6 +4,9 @@ import { supabase } from "../lib/supabase";
 import {
   LayoutDashboard,
   FolderKanban,
+  Award,
+  Wrench,
+  FileText,
   LogOut,
   Plus,
   Pencil,
@@ -20,6 +23,9 @@ import {
 } from "lucide-react";
 
 const BUCKET = "portfolio-projects";
+const CERTIFICATE_BUCKET = "portfolio-certificates";
+const MAX_CERTIFICATE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_CERTIFICATE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -92,7 +98,19 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
 
   const [adminEmail, setAdminEmail] = useState("");
+  const [activeSection, setActiveSection] = useState("projects");
   const [projects, setProjects] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [certificates, setCertificates] = useState([]);
+  const [skillForm, setSkillForm] = useState({ name: "", category: "Frontend", proficiency: "0", published: false, display_order: "0" });
+  const [editingSkillId, setEditingSkillId] = useState(null);
+  const [certificateForm, setCertificateForm] = useState({ title: "", issuer: "", issue_date: "", description: "", published: true, display_order: "0" });
+  const [selectedCertificate, setSelectedCertificate] = useState(null);
+  const [editingCertificate, setEditingCertificate] = useState(null);
+  const [certificateSaving, setCertificateSaving] = useState(false);
+  const [skillSaving, setSkillSaving] = useState(false);
+  const [deletingSkillId, setDeletingSkillId] = useState(null);
+  const [deletingCertificateId, setDeletingCertificateId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -141,6 +159,24 @@ export default function AdminDashboard() {
     return true;
   }, []);
 
+  const loadSkills = useCallback(async () => {
+    const { data, error: queryError } = await supabase.from("skills").select("*").order("display_order", { ascending: true }).order("created_at", { ascending: true });
+    if (queryError) throw queryError;
+    setSkills(data || []);
+  }, []);
+
+  const loadCertificates = useCallback(async () => {
+    const { data, error: queryError } = await supabase.from("certificates").select("*").order("display_order", { ascending: true }).order("created_at", { ascending: false });
+    if (queryError) throw queryError;
+    const rows = data || [];
+    const withUrls = await Promise.all(rows.map(async (item) => {
+      if (!item.file_path) return { ...item, signed_url: "" };
+      const { data: signed, error: signedError } = await supabase.storage.from(CERTIFICATE_BUCKET).createSignedUrl(item.file_path, 60 * 60);
+      return { ...item, signed_url: signedError ? "" : signed?.signedUrl || "" };
+    }));
+    setCertificates(withUrls);
+  }, []);
+
   useEffect(() => {
     let active = true;
 
@@ -172,6 +208,8 @@ export default function AdminDashboard() {
 
         setAdminEmail(data.user.email || "Admin");
         await loadProjects();
+        await loadSkills();
+        await loadCertificates();
       } catch (err) {
         if (active) {
           setError(
@@ -188,7 +226,7 @@ export default function AdminDashboard() {
     return () => {
       active = false;
     };
-  }, [navigate, loadProjects]);
+  }, [navigate, loadProjects, loadSkills, loadCertificates]);
 
   function resetForm() {
     setEditingId(null);
@@ -479,6 +517,189 @@ export default function AdminDashboard() {
     }
   }
 
+  async function saveSkill(event) {
+    event.preventDefault();
+    if (skillSaving) return;
+
+    setError("");
+    setNotice("");
+
+    if (!skillForm.name.trim()) {
+      setError("Andika izina rya skill.");
+      return;
+    }
+
+    const order = Number(skillForm.display_order);
+    if (!Number.isSafeInteger(order) || order < 0) {
+      setError("Display order igomba kuba umubare wuzuye utari munsi ya 0.");
+      return;
+    }
+
+    const proficiencyText = String(skillForm.proficiency ?? "").trim();
+    const proficiency = proficiencyText === "" ? null : Number(proficiencyText);
+    if (proficiency !== null && (!Number.isInteger(proficiency) || proficiency < 0 || proficiency > 100)) {
+      setError("Proficiency igomba kuba umubare uri hagati ya 0 na 100.");
+      return;
+    }
+
+    setSkillSaving(true);
+    try {
+      const payload = {
+        name: skillForm.name.trim(),
+        category: skillForm.category,
+        proficiency,
+        published: Boolean(skillForm.published),
+        display_order: order,
+      };
+
+      const result = editingSkillId
+        ? await supabase.from("skills").update(payload).eq("id", editingSkillId).select().single()
+        : await supabase.from("skills").insert(payload).select().single();
+
+      if (result.error) throw result.error;
+
+      setSkillForm({ name: "", category: "Frontend", proficiency: "0", published: false, display_order: "0" });
+      setEditingSkillId(null);
+      await loadSkills();
+      setNotice(editingSkillId ? "Skill yahinduwe neza." : "Skill nshya yongeweho neza.");
+    } catch (err) {
+      setError(`Ntibyakunze kubika skill: ${getErrorMessage(err)}`);
+    } finally {
+      setSkillSaving(false);
+    }
+  }
+
+  async function toggleSkillPublished(skill) {
+    setError("");
+    setNotice("");
+    try {
+      const { data, error: updateError } = await supabase
+        .from("skills")
+        .update({ published: !skill.published })
+        .eq("id", skill.id)
+        .select("id, name, published")
+        .single();
+
+      if (updateError) throw updateError;
+      if (!data) throw new Error("Nta skill yahinduwe. Reba uburenganzira bwa admin kuri RLS.");
+
+      setSkills((current) => current.map((item) =>
+        item.id === skill.id ? { ...item, published: data.published } : item
+      ));
+      setNotice(data.published ? "Skill yashyizwe ku rubuga." : "Skill yahishwe ku rubuga.");
+    } catch (err) {
+      setError(`Ntibyakunze guhindura status ya skill: ${getErrorMessage(err)}`);
+    }
+  }
+
+  async function deleteSkill(skill) {
+    if (!window.confirm(`Urashaka gusiba skill ya "${skill.name}"?`)) return;
+    setDeletingSkillId(skill.id); setError(""); setNotice("");
+    try {
+      const { data, error: deleteError } = await supabase.from("skills").delete().eq("id", skill.id).select("id");
+      if (deleteError) throw deleteError;
+      if (!data?.length) throw new Error("Skill ntiyasibwe. Reba RLS policies za admin.");
+      setSkills((current) => current.filter((item) => item.id !== skill.id));
+      setNotice("Skill yasibwe neza.");
+    } catch (err) { setError(`Ntibyakunze gusiba skill: ${getErrorMessage(err)}`); }
+    finally { setDeletingSkillId(null); }
+  }
+
+  function chooseCertificateFile(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    setError(""); setNotice("");
+    if (!ALLOWED_CERTIFICATE_TYPES.has(file.type)) {
+      setError("Hitamo PDF, JPG, PNG cyangwa WebP gusa."); input.value = ""; return;
+    }
+    if (file.size === 0 || file.size > MAX_CERTIFICATE_SIZE) {
+      setError("File igomba kuba hagati ya byte 1 na 5 MB."); input.value = ""; return;
+    }
+    setSelectedCertificate(file); input.value = "";
+  }
+
+  function startEditCertificate(certificate) {
+    setEditingCertificate(certificate);
+    setCertificateForm({ title: certificate.title || "", issuer: certificate.issuer || "", issue_date: certificate.issue_date || "", description: certificate.description || "", published: Boolean(certificate.published), display_order: String(certificate.display_order ?? 0) });
+    setSelectedCertificate(null); setError(""); setNotice("");
+    setActiveSection("certificates");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function resetCertificateForm() {
+    setEditingCertificate(null); setSelectedCertificate(null);
+    setCertificateForm({ title: "", issuer: "", issue_date: "", description: "", published: true, display_order: "0" });
+  }
+
+  async function saveCertificate(event) {
+    event.preventDefault();
+    if (certificateSaving) return;
+    setError(""); setNotice("");
+    if (!certificateForm.title.trim() || !certificateForm.issuer.trim()) { setError("Uzuza izina rya certificate n'ikigo cyayitanze."); return; }
+    if (!editingCertificate && !selectedCertificate) { setError("Banza uhitemo certificate file ushaka kohereza."); return; }
+    const order = Number(certificateForm.display_order);
+    if (!Number.isSafeInteger(order) || order < 0) { setError("Display order igomba kuba umubare wuzuye utari munsi ya 0."); return; }
+    setCertificateSaving(true);
+    let uploadedPath = null;
+    try {
+      let filePath = editingCertificate?.file_path || null;
+      if (selectedCertificate) {
+        const extensionByType = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+        const extension = extensionByType[selectedCertificate.type];
+        uploadedPath = `${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from(CERTIFICATE_BUCKET).upload(uploadedPath, selectedCertificate, { cacheControl: "3600", upsert: false, contentType: selectedCertificate.type });
+        if (uploadError) throw uploadError;
+        filePath = uploadedPath;
+      }
+      const payload = { title: certificateForm.title.trim(), issuer: certificateForm.issuer.trim(), issue_date: certificateForm.issue_date || null, description: certificateForm.description.trim() || null, published: certificateForm.published, display_order: order, file_path: filePath };
+      const result = editingCertificate
+        ? await supabase.from("certificates").update(payload).eq("id", editingCertificate.id).select().single()
+        : await supabase.from("certificates").insert(payload).select().single();
+      if (result.error) throw result.error;
+      if (uploadedPath && editingCertificate?.file_path && editingCertificate.file_path !== uploadedPath) {
+        const { error: removeError } = await supabase.storage.from(CERTIFICATE_BUCKET).remove([editingCertificate.file_path]);
+        if (removeError) setImageWarning(`Certificate yabitswe, ariko file ishaje ntiyasibwe: ${removeError.message}`);
+      }
+      resetCertificateForm();
+      await loadCertificates();
+      setNotice(editingCertificate ? "Certificate yahinduwe neza." : "Certificate yoherejwe kandi yabitswe neza.");
+    } catch (err) {
+      setError(`Ntibyakunze kubika certificate: ${getErrorMessage(err)}`);
+      if (uploadedPath) {
+        const { error: cleanupError } = await supabase.storage.from(CERTIFICATE_BUCKET).remove([uploadedPath]);
+        if (cleanupError) setImageWarning(`Upload yanze kubikwa muri database kandi file nshya ntiyasibwe muri Storage: ${cleanupError.message}`);
+      }
+    } finally { setCertificateSaving(false); }
+  }
+
+  async function deleteCertificate(certificate) {
+    if (!window.confirm(`Urashaka gusiba certificate ya "${certificate.title}"? Iki gikorwa ntigisubizwa inyuma.`)) return;
+    setDeletingCertificateId(certificate.id); setError(""); setNotice("");
+    try {
+      const { data, error: deleteError } = await supabase.from("certificates").delete().eq("id", certificate.id).select("id");
+      if (deleteError) throw deleteError;
+      if (!data?.length) throw new Error("Certificate ntiyasibwe. Reba RLS policies.");
+      setCertificates((current) => current.filter((item) => item.id !== certificate.id));
+      if (certificate.file_path) {
+        const { error: removeError } = await supabase.storage.from(CERTIFICATE_BUCKET).remove([certificate.file_path]);
+        if (removeError) setImageWarning(`Certificate yasibwe muri database ariko file yasigaye muri Storage: ${removeError.message}`);
+      }
+      setNotice("Certificate yasibwe neza.");
+    } catch (err) { setError(`Ntibyakunze gusiba certificate: ${getErrorMessage(err)}`); }
+    finally { setDeletingCertificateId(null); }
+  }
+
+  async function toggleCertificatePublished(certificate) {
+    setError(""); setNotice("");
+    try {
+      const { data, error: updateError } = await supabase.from("certificates").update({ published: !certificate.published }).eq("id", certificate.id).select().single();
+      if (updateError) throw updateError;
+      await loadCertificates();
+      setNotice(data.published ? "Certificate yashyizwe ku rubuga." : "Certificate yahishwe ku rubuga.");
+    } catch (err) { setError(`Ntibyakunze guhindura status: ${getErrorMessage(err)}`); }
+  }
+
   async function togglePublished(project) {
     if (publishingId || saving || deletingId) return;
 
@@ -619,15 +840,15 @@ export default function AdminDashboard() {
         </p>
 
         <nav className="mt-8 space-y-2">
-          <div className="flex items-center gap-3 rounded-xl bg-blue-600/15 px-4 py-3 text-blue-300">
-            <LayoutDashboard size={19} />
-            Dashboard
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl bg-slate-800 px-4 py-3 text-slate-200">
-            <FolderKanban size={19} />
-            Projects
-          </div>
+          <button onClick={() => setActiveSection("projects")} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left ${activeSection === "projects" ? "bg-blue-600/15 text-blue-300" : "text-slate-300 hover:bg-slate-800"}`}>
+            <FolderKanban size={19} /> Projects
+          </button>
+          <button onClick={() => setActiveSection("skills")} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left ${activeSection === "skills" ? "bg-blue-600/15 text-blue-300" : "text-slate-300 hover:bg-slate-800"}`}>
+            <Wrench size={19} /> Skills
+          </button>
+          <button onClick={() => setActiveSection("certificates")} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left ${activeSection === "certificates" ? "bg-blue-600/15 text-blue-300" : "text-slate-300 hover:bg-slate-800"}`}>
+            <Award size={19} /> Certificates
+          </button>
         </nav>
 
         <button
@@ -641,6 +862,8 @@ export default function AdminDashboard() {
       </aside>
 
       <main className="min-w-0 flex-1 p-5 md:p-10">
+        {activeSection === "projects" && (
+          <>
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold tracking-widest text-blue-400">
@@ -1155,6 +1378,47 @@ export default function AdminDashboard() {
             </div>
           )}
         </section>
+          </>
+        )}
+
+        {activeSection === "skills" && (
+          <section>
+            <header className="flex flex-wrap items-center justify-between gap-4">
+              <div><p className="text-sm font-semibold tracking-widest text-blue-400">PORTFOLIO MANAGEMENT</p><h1 className="mt-2 text-3xl font-bold">Skills</h1><p className="mt-2 text-sm text-slate-400">Ongeramo, hindura cyangwa usibe ubumenyi bugaragara kuri portfolio.</p></div>
+            </header>
+            {error && <div role="alert" className="mt-6 break-words rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300"><strong>Ikosa:</strong> {error}</div>}
+            {notice && <div role="status" className="mt-6 rounded-xl border border-emerald-900 bg-emerald-950/40 p-4 text-sm text-emerald-300">{notice}</div>}
+            <form onSubmit={saveSkill} className="mt-6 grid gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 md:grid-cols-2">
+              <div><label className="mb-2 block text-sm text-slate-300">Izina rya skill *</label><input required maxLength={100} value={skillForm.name} onChange={(e) => setSkillForm({...skillForm, name:e.target.value})} placeholder="Urugero: React" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500" /></div>
+              <div><label className="mb-2 block text-sm text-slate-300">Category</label><select value={skillForm.category} onChange={(e) => setSkillForm({...skillForm, category:e.target.value})} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"><option>Frontend</option><option>Backend</option><option>Database</option><option>Tools</option><option>Other</option></select></div>
+              <div><label className="mb-2 block text-sm text-slate-300">Proficiency (0–100%)</label><input type="number" min="0" max="100" step="1" value={skillForm.proficiency} onChange={(e) => setSkillForm({...skillForm, proficiency:e.target.value})} placeholder="Urugero: 75" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" /></div>
+              <div><label className="mb-2 block text-sm text-slate-300">Display order</label><input type="number" min="0" step="1" value={skillForm.display_order} onChange={(e) => setSkillForm({...skillForm, display_order:e.target.value})} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" /></div>
+              <label className="flex items-center gap-3 rounded-xl border border-slate-700 p-4 md:col-span-2"><input type="checkbox" checked={skillForm.published} onChange={(e) => setSkillForm({...skillForm,published:e.target.checked})} disabled={skillSaving} className="h-4 w-4 accent-blue-500"/><span><span className="block font-medium">Publish skill</span><span className="text-sm text-slate-400">Iyo uhisemo, skill izagaragara ku rubuga rusange.</span></span></label><div className="flex flex-wrap gap-3 md:col-span-2"><button disabled={skillSaving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50"><Save size={18}/>{skillSaving ? "Birabikwa..." : editingSkillId ? "Bika impinduka" : "Ongeramo Skill"}</button>{editingSkillId && <button type="button" onClick={() => {setEditingSkillId(null);setSkillForm({name:"",category:"Frontend",proficiency:"0",published:false,display_order:"0"})}} className="rounded-xl border border-slate-700 px-4 py-3">Reka guhindura</button>}</div>
+            </form>
+            <div className="mt-6 grid gap-4 md:grid-cols-2">{skills.map((skill) => <article key={skill.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-bold">{skill.name}</h2><p className="mt-1 text-sm text-blue-300">{skill.category}</p><p className="mt-2 text-sm text-slate-400">Proficiency: {skill.proficiency == null ? "Ntabwo yashyizweho" : `${skill.proficiency}%`}</p></div><div className="flex flex-col items-end gap-2"><span className={`rounded-full border px-2 py-1 text-xs ${skill.published ? "border-emerald-500/30 text-emerald-300" : "border-amber-500/30 text-amber-300"}`}>{skill.published ? "Published" : "Draft"}</span><span className="text-xs text-slate-500">Order: {skill.display_order ?? 0}</span></div></div><div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4"><button onClick={() => {setEditingSkillId(skill.id);setSkillForm({name:skill.name,category:skill.category || "Other",proficiency:String(skill.proficiency ?? 0),published:Boolean(skill.published),display_order:String(skill.display_order ?? 0)});setError("");setNotice("")}} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm"><Pencil size={15}/> Hindura</button><button onClick={() => toggleSkillPublished(skill)} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm">{skill.published ? <EyeOff size={15}/> : <Eye size={15}/>} {skill.published ? "Hisha" : "Publish"}</button><button onClick={() => deleteSkill(skill)} disabled={deletingSkillId === skill.id} className="inline-flex items-center gap-2 rounded-lg border border-red-900 px-3 py-2 text-sm text-red-300 disabled:opacity-50"><Trash2 size={15}/> {deletingSkillId === skill.id ? "Birimo gusiba..." : "Siba"}</button></div></article>)}</div>
+            {skills.length === 0 && <p className="mt-6 rounded-xl border border-dashed border-slate-700 p-8 text-center text-slate-400">Nta skills zirashyirwamo. Koresha form iri hejuru.</p>}
+          </section>
+        )}
+
+        {activeSection === "certificates" && (
+          <section>
+            <header><p className="text-sm font-semibold tracking-widest text-blue-400">PORTFOLIO MANAGEMENT</p><h1 className="mt-2 text-3xl font-bold">Certificates</h1><p className="mt-2 text-sm text-slate-400">Ohereza PDF cyangwa ifoto ya certificate yawe.</p></header>
+            {error && <div role="alert" className="mt-6 break-words rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300"><strong>Ikosa:</strong> {error}</div>}
+            {notice && <div role="status" className="mt-6 rounded-xl border border-emerald-900 bg-emerald-950/40 p-4 text-sm text-emerald-300">{notice}</div>}
+            {imageWarning && <div role="status" className="mt-4 break-words rounded-xl border border-amber-900 bg-amber-950/40 p-4 text-sm text-amber-300">{imageWarning}</div>}
+            <form onSubmit={saveCertificate} className="mt-6 grid gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 md:grid-cols-2">
+              <div><label className="mb-2 block text-sm text-slate-300">Izina rya certificate *</label><input required maxLength={180} value={certificateForm.title} onChange={(e) => setCertificateForm({...certificateForm,title:e.target.value})} placeholder="Urugero: Web Development Certificate" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" /></div>
+              <div><label className="mb-2 block text-sm text-slate-300">Ikigo cyayitanze *</label><input required maxLength={180} value={certificateForm.issuer} onChange={(e) => setCertificateForm({...certificateForm,issuer:e.target.value})} placeholder="Urugero: Coursera" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" /></div>
+              <div><label className="mb-2 block text-sm text-slate-300">Itariki wayibonyeho</label><input type="date" value={certificateForm.issue_date} onChange={(e) => setCertificateForm({...certificateForm,issue_date:e.target.value})} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" /></div>
+              <div><label className="mb-2 block text-sm text-slate-300">Display order</label><input type="number" min="0" step="1" value={certificateForm.display_order} onChange={(e) => setCertificateForm({...certificateForm,display_order:e.target.value})} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" /></div>
+              <div className="md:col-span-2"><label className="mb-2 block text-sm text-slate-300">Ibisobanuro</label><textarea rows="3" value={certificateForm.description} onChange={(e) => setCertificateForm({...certificateForm,description:e.target.value})} placeholder="Andika ibisobanuro bigufi..." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3" /></div>
+              <div className="md:col-span-2 rounded-2xl border border-dashed border-slate-700 bg-slate-950/70 p-5"><div className="flex items-center gap-3"><FileText size={30} className="text-blue-400"/><div><p className="font-medium">Upload certificate file</p><p className="text-xs text-slate-400">PDF, JPG, PNG cyangwa WebP · Ntirenze 5 MB</p></div></div><input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" onChange={chooseCertificateFile} disabled={certificateSaving} className="mt-4 w-full text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:font-semibold file:text-white"/>{selectedCertificate && <p className="mt-3 break-all text-sm text-emerald-300">File wahisemo: {selectedCertificate.name} ({(selectedCertificate.size/(1024*1024)).toFixed(2)} MB)</p>}{editingCertificate && <p className="mt-2 text-xs text-slate-400">Niba udahitamo file nshya, file iriho iragumana.</p>}</div>
+              <label className="flex items-center gap-3 rounded-xl border border-slate-700 p-4 md:col-span-2"><input type="checkbox" checked={certificateForm.published} onChange={(e) => setCertificateForm({...certificateForm,published:e.target.checked})} className="h-4 w-4 accent-blue-500"/><span><span className="block font-medium">Erekana kuri portfolio</span><span className="text-sm text-slate-400">Niba utabishyizeho akamenyetso, certificate izaguma ari draft.</span></span></label>
+              <div className="flex flex-wrap gap-3 md:col-span-2"><button type="submit" disabled={certificateSaving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{certificateSaving ? <LoaderCircle size={18} className="animate-spin"/> : <Save size={18}/>} {certificateSaving ? "Birimo kubika..." : editingCertificate ? "Bika impinduka" : "Ohereza Certificate"}</button><button type="button" onClick={resetCertificateForm} disabled={certificateSaving} className="rounded-xl border border-slate-700 px-5 py-3">Siba ibyo wanditse</button></div>
+            </form>
+            <div className="mt-8"><h2 className="mb-4 text-xl font-bold">Certificates zibitswe</h2>{certificates.length === 0 ? <p className="rounded-xl border border-dashed border-slate-700 p-8 text-center text-slate-400">Nta certificate urashyiramo.</p> : <div className="grid gap-4 md:grid-cols-2">{certificates.map((certificate) => <article key={certificate.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="font-bold">{certificate.title}</h3><p className="mt-1 text-sm text-blue-300">{certificate.issuer}</p><p className="mt-1 text-xs text-slate-500">{certificate.issue_date || "Itariki ntiyashyizweho"}</p></div><span className={`rounded-full border px-2 py-1 text-xs ${certificate.published ? "border-emerald-500/30 text-emerald-300" : "border-amber-500/30 text-amber-300"}`}>{certificate.published ? "Published" : "Draft"}</span></div>{certificate.description && <p className="mt-3 text-sm text-slate-400">{certificate.description}</p>}<div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4">{certificate.signed_url && <a href={certificate.signed_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm"><ExternalLink size={15}/> Reba file</a>}<button onClick={() => startEditCertificate(certificate)} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm"><Pencil size={15}/> Hindura</button><button onClick={() => toggleCertificatePublished(certificate)} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm">{certificate.published ? <EyeOff size={15}/> : <Eye size={15}/>} {certificate.published ? "Hisha" : "Erekana"}</button><button onClick={() => deleteCertificate(certificate)} disabled={deletingCertificateId === certificate.id} className="inline-flex items-center gap-2 rounded-lg border border-red-900 px-3 py-2 text-sm text-red-300 disabled:opacity-50"><Trash2 size={15}/> {deletingCertificateId === certificate.id ? "Birimo gusiba..." : "Siba"}</button></div></article>)}</div>}</div>
+          </section>
+        )}
       </main>
     </div>
   );

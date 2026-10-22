@@ -15,7 +15,6 @@ import {
   X,
   MapPin,
   Terminal,
-  MessageCircle,
 } from "lucide-react";
 
 import { testSupabaseConnection } from "./lib/testSupabase";
@@ -85,35 +84,64 @@ useEffect(() => {
   loadProjects();
 }, []);
 
-const handleWhatsAppSubmit = (event) => {
-  event.preventDefault();
+// Load only certificates that the admin has published.
+const [certificates, setCertificates] = useState([]);
+const [certificatesLoading, setCertificatesLoading] = useState(true);
+const [certificatesError, setCertificatesError] = useState("");
 
-  const form = event.currentTarget;
-  const formData = new FormData(form);
+useEffect(() => {
+  let active = true;
 
-  const name = formData.get("name")?.toString().trim();
-  const email = formData.get("email")?.toString().trim();
-  const message = formData.get("message")?.toString().trim();
+  async function loadCertificates() {
+    setCertificatesLoading(true);
+    setCertificatesError("");
 
-  if (!name || !email || !message) {
-    return;
+    try {
+      const { data, error } = await supabase
+        .from("certificates")
+        .select("id, title, issuer, issue_date, credential_url, file_path, description, published, display_order")
+        .eq("published", true)
+        .order("display_order", { ascending: true });
+
+      if (error) throw error;
+
+      const rows = data ?? [];
+      const certificatesWithUrls = await Promise.all(
+        rows.map(async (certificate) => {
+          if (!certificate.file_path) {
+            return { ...certificate, signed_url: "" };
+          }
+
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from("portfolio-certificates")
+            .createSignedUrl(certificate.file_path, 60 * 60);
+
+          if (signedError) {
+            console.error("Could not create certificate URL:", signedError);
+          }
+
+          return {
+            ...certificate,
+            signed_url: signedError ? "" : (signedData?.signedUrl || ""),
+          };
+        })
+      );
+
+      if (active) setCertificates(certificatesWithUrls);
+    } catch (error) {
+      console.error("Failed to load certificates:", error);
+      if (active) {
+        setCertificatesError("Certificates could not be loaded right now.");
+        setCertificates([]);
+      }
+    } finally {
+      if (active) setCertificatesLoading(false);
+    }
   }
 
-  const text = [
-    "Hello Janvier! I contacted you through your portfolio.",
-    "",
-    `Name: ${name}`,
-    `Email: ${email}`,
-    "",
-    "Message:",
-    message,
-  ].join("\n");
-
-  const whatsappUrl =
-    `https://wa.me/250795881016?text=${encodeURIComponent(text)}`;
-
-  window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-};
+  loadCertificates();
+  return () => { active = false; };
+}, []);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
@@ -452,6 +480,78 @@ const handleWhatsAppSubmit = (event) => {
               </div>
             ))}
           </div>
+
+          {/* Certificates & credentials */}
+          <div className="mt-20 border-t border-slate-800 pt-12">
+            <div className="mb-8">
+              <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-blue-400">
+                Certificates & Credentials
+              </p>
+              <h3 className="text-2xl font-bold sm:text-3xl">
+                Learning achievements
+              </h3>
+              <p className="mt-3 max-w-2xl leading-7 text-slate-400">
+                Certificates and credentials that reflect my continued learning and development.
+              </p>
+            </div>
+
+            {certificatesLoading ? (
+              <p className="py-6 text-slate-400">Loading certificates...</p>
+            ) : certificatesError ? (
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5 text-sm text-red-300">
+                {certificatesError}
+              </div>
+            ) : certificates.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-slate-400">
+                Certificates will appear here when they are published.
+              </div>
+            ) : (
+              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {certificates.map((certificate) => {
+                  const certificateLink = certificate.signed_url || certificate.credential_url || "";
+
+                  return (
+                    <article
+                      key={certificate.id}
+                      className="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900/60 p-6 transition hover:-translate-y-1 hover:border-blue-500/50"
+                    >
+                      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
+                        <GraduationCap size={23} />
+                      </div>
+                      <h4 className="text-lg font-semibold text-slate-100">
+                        {certificate.title}
+                      </h4>
+                      {certificate.issuer && (
+                        <p className="mt-2 text-sm text-blue-300">{certificate.issuer}</p>
+                      )}
+                      {certificate.issue_date && (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Issued {new Date(`${certificate.issue_date}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+                        </p>
+                      )}
+                      {certificate.description && (
+                        <p className="mt-4 flex-1 text-sm leading-6 text-slate-400">
+                          {certificate.description}
+                        </p>
+                      )}
+                      {certificateLink ? (
+                        <a
+                          href={certificateLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-6 inline-flex items-center gap-2 self-start rounded-xl border border-blue-500/30 px-4 py-2.5 text-sm font-semibold text-blue-300 transition hover:border-blue-400 hover:bg-blue-500/10"
+                        >
+                          View Certificate <ExternalLink size={16} />
+                        </a>
+                      ) : (
+                        <p className="mt-6 text-xs text-slate-500">Certificate file is not available.</p>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Projects */}
@@ -594,12 +694,9 @@ const handleWhatsAppSubmit = (event) => {
 </section>
 
         {/* Contact */}
-        <section
-          id="contact"
-          className="scroll-mt-24 mx-auto max-w-5xl px-6 py-24 text-center lg:px-8"
-        >
+        <section id="contact" className="scroll-mt-24 mx-auto max-w-5xl px-6 py-24 text-center lg:px-8">
           <div className="rounded-3xl border border-slate-800 bg-gradient-to-br from-blue-500/10 via-slate-900 to-violet-500/10 px-6 py-14 sm:px-12">
-            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400">
               <Mail size={27} />
             </div>
 
@@ -612,83 +709,15 @@ const handleWhatsAppSubmit = (event) => {
             <p className="mx-auto mt-5 max-w-2xl leading-8 text-slate-400">
               I'm interested in learning, collaborating on projects, and
               exploring opportunities to grow as a software developer.
-              Send me a message and let's connect.
+              Let's connect.
             </p>
 
-            <form
-              onSubmit={handleWhatsAppSubmit}
-              className="mx-auto mt-10 max-w-xl space-y-5 text-left"
+            <a
+              href="mailto:your-email@example.com"
+              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-blue-500 px-7 py-3.5 font-semibold text-white transition hover:bg-blue-600"
             >
-              <div>
-                <label
-                  htmlFor="contact-name"
-                  className="mb-2 block text-sm font-medium text-slate-300"
-                >
-                  Your Name
-                </label>
-                <input
-                  id="contact-name"
-                  name="name"
-                  type="text"
-                  placeholder="Enter your name"
-                  autoComplete="name"
-                  required
-                  maxLength={100}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="contact-email"
-                  className="mb-2 block text-sm font-medium text-slate-300"
-                >
-                  Your Email
-                </label>
-                <input
-                  id="contact-email"
-                  name="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  required
-                  maxLength={254}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="contact-message"
-                  className="mb-2 block text-sm font-medium text-slate-300"
-                >
-                  Your Message
-                </label>
-                <textarea
-                  id="contact-message"
-                  name="message"
-                  placeholder="Tell me about your idea or project..."
-                  rows={5}
-                  required
-                  maxLength={3000}
-                  className="w-full resize-y rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-7 py-4 font-semibold text-white transition hover:bg-[#1ebe5d] sm:w-auto"
-              >
-                <MessageCircle size={20} />
-                Send Message on WhatsApp
-                <ArrowRight size={18} />
-              </button>
-
-              <p className="text-sm leading-6 text-slate-500">
-                WhatsApp will open with your message ready to send.
-                Please confirm and send it there.
-              </p>
-            </form>
+              Send Me an Email <ArrowRight size={18} />
+            </a>
           </div>
         </section>
       </main>
