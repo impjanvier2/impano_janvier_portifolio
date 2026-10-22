@@ -15,6 +15,7 @@ import {
   X,
   MapPin,
   Terminal,
+  MessageCircle,
 } from "lucide-react";
 
 import { testSupabaseConnection } from "./lib/testSupabase";
@@ -83,6 +84,36 @@ useEffect(() => {
 
   loadProjects();
 }, []);
+
+const handleWhatsAppSubmit = (event) => {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+
+  const name = formData.get("name")?.toString().trim();
+  const email = formData.get("email")?.toString().trim();
+  const message = formData.get("message")?.toString().trim();
+
+  if (!name || !email || !message) {
+    return;
+  }
+
+  const text = [
+    "Hello Janvier! I contacted you through your portfolio.",
+    "",
+    `Name: ${name}`,
+    `Email: ${email}`,
+    "",
+    "Message:",
+    message,
+  ].join("\n");
+
+  const whatsappUrl =
+    `https://wa.me/250795881016?text=${encodeURIComponent(text)}`;
+
+  window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+};
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
@@ -563,9 +594,12 @@ useEffect(() => {
 </section>
 
         {/* Contact */}
-        <section id="contact" className="scroll-mt-24 mx-auto max-w-5xl px-6 py-24 text-center lg:px-8">
+        <section
+          id="contact"
+          className="scroll-mt-24 mx-auto max-w-5xl px-6 py-24 text-center lg:px-8"
+        >
           <div className="rounded-3xl border border-slate-800 bg-gradient-to-br from-blue-500/10 via-slate-900 to-violet-500/10 px-6 py-14 sm:px-12">
-            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400">
+            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
               <Mail size={27} />
             </div>
 
@@ -578,15 +612,83 @@ useEffect(() => {
             <p className="mx-auto mt-5 max-w-2xl leading-8 text-slate-400">
               I'm interested in learning, collaborating on projects, and
               exploring opportunities to grow as a software developer.
-              Let's connect.
+              Send me a message and let's connect.
             </p>
 
-            <a
-              href="mailto:your-email@example.com"
-              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-blue-500 px-7 py-3.5 font-semibold text-white transition hover:bg-blue-600"
+            <form
+              onSubmit={handleWhatsAppSubmit}
+              className="mx-auto mt-10 max-w-xl space-y-5 text-left"
             >
-              Send Me an Email <ArrowRight size={18} />
-            </a>
+              <div>
+                <label
+                  htmlFor="contact-name"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  Your Name
+                </label>
+                <input
+                  id="contact-name"
+                  name="name"
+                  type="text"
+                  placeholder="Enter your name"
+                  autoComplete="name"
+                  required
+                  maxLength={100}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="contact-email"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  Your Email
+                </label>
+                <input
+                  id="contact-email"
+                  name="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="contact-message"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  Your Message
+                </label>
+                <textarea
+                  id="contact-message"
+                  name="message"
+                  placeholder="Tell me about your idea or project..."
+                  rows={5}
+                  required
+                  maxLength={3000}
+                  className="w-full resize-y rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-7 py-4 font-semibold text-white transition hover:bg-[#1ebe5d] sm:w-auto"
+              >
+                <MessageCircle size={20} />
+                Send Message on WhatsApp
+                <ArrowRight size={18} />
+              </button>
+
+              <p className="text-sm leading-6 text-slate-500">
+                WhatsApp will open with your message ready to send.
+                Please confirm and send it there.
+              </p>
+            </form>
           </div>
         </section>
       </main>
