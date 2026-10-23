@@ -1,1 +1,321 @@
 @import "tailwindcss";
+
+/* =========================================
+   PORTFOLIO THEME VARIABLES
+========================================= */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page-bg: #020617;
+  --section-bg: #0f172a;
+  --card-bg: #0f172a;
+  --card-bg-soft: #111827;
+  --main-text: #f1f5f9;
+  --secondary-text: #94a3b8;
+  --muted-text: #64748b;
+  --border-color: #1e293b;
+  --input-bg: #0f172a;
+  --hover-bg: #1e293b;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --page-bg: #f8fafc;
+  --section-bg: #f1f5f9;
+  --card-bg: #ffffff;
+  --card-bg-soft: #f8fafc;
+  --main-text: #0f172a;
+  --secondary-text: #475569;
+  --muted-text: #64748b;
+  --border-color: #cbd5e1;
+  --input-bg: #ffffff;
+  --hover-bg: #e2e8f0;
+}
+
+/* =========================================
+   GLOBAL STYLES
+========================================= */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--page-bg);
+  color: var(--main-text);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+body,
+header,
+footer,
+section,
+article,
+button,
+a,
+input,
+textarea,
+select {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease;
+}
+
+/* =========================================
+   LIGHT MODE: PAGE BACKGROUNDS
+   These override the relevant Tailwind colors.
+========================================= */
+
+:root[data-theme="light"] .bg-slate-950 {
+  background-color: var(--page-bg);
+}
+
+:root[data-theme="light"] .bg-slate-900 {
+  background-color: var(--section-bg);
+}
+
+:root[data-theme="light"] .bg-slate-900\/40,
+:root[data-theme="light"] .bg-slate-900\/60,
+:root[data-theme="light"] .bg-slate-900\/90 {
+  background-color: var(--card-bg);
+}
+
+:root[data-theme="light"] .bg-slate-950\/50 {
+  background-color: rgb(241 245 249 / 85%);
+}
+
+:root[data-theme="light"] .bg-slate-950\/85 {
+  background-color: rgb(255 255 255 / 90%);
+}
+
+:root[data-theme="light"] .bg-slate-800 {
+  background-color: var(--hover-bg);
+}
+
+/* =========================================
+   LIGHT MODE: TEXT
+========================================= */
+
+:root[data-theme="light"] .text-white,
+:root[data-theme="light"] .text-slate-100,
+:root[data-theme="light"] .text-slate-200 {
+  color: var(--main-text);
+}
+
+:root[data-theme="light"] .text-slate-300,
+:root[data-theme="light"] .text-slate-400 {
+  color: var(--secondary-text);
+}
+
+:root[data-theme="light"] .text-slate-500,
+:root[data-theme="light"] .text-slate-600 {
+  color: var(--muted-text);
+}
+
+/* =========================================
+   LIGHT MODE: BORDERS
+========================================= */
+
+:root[data-theme="light"] .border-slate-700,
+:root[data-theme="light"] .border-slate-800,
+:root[data-theme="light"] .border-slate-900 {
+  border-color: var(--border-color);
+}
+
+:root[data-theme="light"] .border-white\/5,
+:root[data-theme="light"] .border-white\/10 {
+  border-color: var(--border-color);
+}
+
+/* =========================================
+   LIGHT MODE: HOVER STATES
+========================================= */
+
+:root[data-theme="light"] .hover\:bg-slate-900:hover,
+:root[data-theme="light"] .hover\:bg-slate-800:hover {
+  background-color: var(--hover-bg);
+}
+
+:root[data-theme="light"] .hover\:text-white:hover {
+  color: var(--main-text);
+}
+
+:root[data-theme="light"] .hover\:border-slate-500:hover {
+  border-color: #94a3b8;
+}
+
+/* =========================================
+   LIGHT MODE: THEME BUTTON
+========================================= */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--main-text);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* =========================================
+   ACCESSIBILITY
+========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* =========================================
+   IMPANO JANVIER - MODERN ANIMATIONS
+========================================= */
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Reveal elements when they enter the viewport.
+   Content remains visible if JavaScript is unavailable. */
+.has-reveal .reveal:not(.is-visible) {
+  opacity: 0;
+  filter: blur(3px);
+  transition:
+    opacity 0.75s ease,
+    transform 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.75s ease;
+}
+
+.reveal {
+  --reveal-distance: 24px;
+  transform: translate3d(0, var(--reveal-distance), 0);
+}
+
+.reveal-up {
+  --reveal-distance: 28px;
+}
+
+.reveal-left {
+  --reveal-distance: 0px;
+  transform: translate3d(-32px, 0, 0);
+}
+
+.reveal-right {
+  --reveal-distance: 0px;
+  transform: translate3d(32px, 0, 0);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  filter: blur(0);
+  transform: translate3d(0, 0, 0);
+}
+
+/* Small stagger delays */
+.delay-100 {
+  transition-delay: 100ms !important;
+}
+
+.delay-200 {
+  transition-delay: 200ms !important;
+}
+
+.delay-300 {
+  transition-delay: 300ms !important;
+}
+
+/* Typing cursor */
+.typing-title {
+  display: inline;
+  color: #38bdf8;
+}
+
+.typing-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  color: #60a5fa;
+  animation: typing-blink 0.8s step-end infinite;
+}
+
+@keyframes typing-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Card hover effects */
+#skills article,
+#skills .group,
+#projects article,
+#contact a,
+#contact button {
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    background-color 0.3s ease;
+}
+
+#skills .group:hover,
+#projects article:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 14px 35px rgb(37 99 235 / 10%);
+}
+
+/* Buttons lift gently on hover */
+main a[href],
+main button {
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    background-color 0.25s ease,
+    border-color 0.25s ease;
+}
+
+main a[href]:hover,
+main button:hover {
+  transform: translateY(-2px);
+}
+
+/* Respect accessibility preferences */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .has-reveal .reveal:not(.is-visible),
+  .reveal,
+  .reveal.is-visible,
+  .typing-cursor,
+  #skills .group,
+  #projects article,
+  main a[href],
+  main button {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+  }
+}

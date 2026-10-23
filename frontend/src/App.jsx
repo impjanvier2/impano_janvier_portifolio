@@ -1,6 +1,8 @@
 
 import {
   Code2,
+  Moon,
+  Sun,
   Mail,
   Monitor,
   Database,
@@ -8,6 +10,7 @@ import {
   ArrowDown,
   ExternalLink,
   Globe,
+  MessageCircle,
   User,
   Briefcase,
   GraduationCap,
@@ -25,18 +28,110 @@ import { supabase } from "./lib/supabase";
 import { useEffect, useState } from "react";
 
 
-const skills = [
-  { name: "HTML & CSS", level: "Frontend" },
-  { name: "JavaScript", level: "Frontend" },
-  { name: "React", level: "Frontend" },
-  { name: "Node.js & Express", level: "Backend" },
-  { name: "MySQL", level: "Database" },
-  { name: "Supabase", level: "Database" },
-  { name: "Git & GitHub", level: "Tools" },
-  { name: "Tailwind CSS", level: "Frontend" },
-];
 
 function PortfolioHome()  {
+
+
+
+function RotatingTitle() {
+  const titles = [
+    "Software Developer",
+    "Full-Stack Developer",
+    "Web Developer",
+    "Problem Solver",
+  ];
+
+  const [titleIndex, setTitleIndex] = useState(0);
+  const [displayText, setDisplayText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const currentTitle = titles[titleIndex];
+    let delay = deleting ? 45 : 90;
+
+    if (!deleting && displayText === currentTitle) {
+      delay = 1500;
+    }
+
+    const timeout = setTimeout(() => {
+      if (!deleting && displayText === currentTitle) {
+        setDeleting(true);
+        return;
+      }
+
+      if (deleting && displayText === "") {
+        setDeleting(false);
+        setTitleIndex((previous) => (previous + 1) % titles.length);
+        return;
+      }
+
+      setDisplayText(
+        currentTitle.slice(
+          0,
+          displayText.length + (deleting ? -1 : 1)
+        )
+      );
+    }, delay);
+
+    return () => clearTimeout(timeout);
+  }, [displayText, deleting, titleIndex]);
+
+  return (
+    <span className="typing-title">
+      {displayText}
+      <span className="typing-cursor" aria-hidden="true">
+        |
+      </span>
+    </span>
+  );
+}
+
+  // Skills loaded from Supabase.
+// Only skills published by the admin appear on the public portfolio.
+const [skills, setSkills] = useState([]);
+const [skillsLoading, setSkillsLoading] = useState(true);
+const [skillsError, setSkillsError] = useState("");
+
+useEffect(() => {
+  let active = true;
+
+  async function loadSkills() {
+    setSkillsLoading(true);
+    setSkillsError("");
+
+    try {
+      const { data, error } = await supabase
+        .from("skills")
+        .select("id, name, category, proficiency, published, display_order")
+        .eq("published", true)
+        .order("display_order", { ascending: true });
+
+      if (error) throw error;
+
+      if (active) {
+        setSkills(data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to load portfolio skills:", error);
+
+      if (active) {
+        setSkillsError("Skills could not be loaded right now.");
+        setSkills([]);
+      }
+    } finally {
+      if (active) {
+        setSkillsLoading(false);
+      }
+    }
+  }
+
+  loadSkills();
+
+  return () => {
+    active = false;
+  };
+}, []);
+
   const [menuOpen, setMenuOpen] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
@@ -143,6 +238,88 @@ useEffect(() => {
   return () => { active = false; };
 }, []);
 
+const [theme, setTheme] = useState(() => {
+  return localStorage.getItem("portfolio-theme") || "dark";
+});
+
+useEffect(() => {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("portfolio-theme", theme);
+}, [theme]);
+
+const toggleTheme = () => {
+  setTheme((currentTheme) =>
+    currentTheme === "dark" ? "light" : "dark"
+  );
+};
+
+
+useEffect(() => {
+  const root = document.documentElement;
+  root.classList.add("has-reveal");
+
+  if (
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    !("IntersectionObserver" in window)
+  ) {
+    root.classList.remove("has-reveal");
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    {
+      threshold: 0.12,
+      rootMargin: "0px 0px -40px 0px",
+    }
+  );
+
+  const observeElements = (container) => {
+    if (container.matches?.(".reveal")) {
+      observer.observe(container);
+    }
+
+    container.querySelectorAll?.(".reveal").forEach((element) => {
+      observer.observe(element);
+    });
+  };
+
+  observeElements(document.body);
+
+  // Observe cards added later by Supabase.
+  const mutationObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          observeElements(node);
+        }
+      });
+    });
+  });
+
+  mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  return () => {
+    observer.disconnect();
+    mutationObserver.disconnect();
+    root.classList.remove("has-reveal");
+  };
+}, []);
+
+
+
+
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
       {/* Background decoration */}
@@ -196,6 +373,27 @@ useEffect(() => {
   >
     Let's Talk
   </a>
+  <button
+  type="button"
+  onClick={toggleTheme}
+  aria-label={
+    theme === "dark"
+      ? "Switch to light mode"
+      : "Switch to dark mode"
+  }
+  title={
+    theme === "dark"
+      ? "Switch to light mode"
+      : "Switch to dark mode"
+  }
+  className="theme-toggle"
+>
+  {theme === "dark" ? (
+    <Sun size={20} />
+  ) : (
+    <Moon size={20} />
+  )}
+</button>
 </div>
 
 
@@ -251,9 +449,15 @@ useEffect(() => {
               Software Development Student
             </div>
 
-            <p className="mb-4 text-lg font-medium text-blue-400">
-              Hello, welcome to my portfolio.
-            </p>
+           
+<p className="mb-4 text-lg font-medium text-blue-400 reveal reveal-up">
+  Hello, welcome to my portfolio.
+</p>
+
+<div className="mb-4 min-h-8 text-lg font-semibold text-cyan-500 reveal reveal-up">
+  <RotatingTitle />
+</div>
+
 
             <h1 className="max-w-2xl text-5xl font-bold leading-tight tracking-tight sm:text-6xl lg:text-7xl">
               I'm IMPANO
@@ -326,7 +530,7 @@ useEffect(() => {
           </div>
 
           {/* Developer card */}
-          <div className="mx-auto w-full max-w-lg">
+          <div className="mx-auto w-full max-w-lg reveal reveal-right delay-200">
             <div className="relative">
               <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-blue-500/20 via-violet-500/10 to-cyan-500/20 blur-2xl" />
 
@@ -451,7 +655,7 @@ useEffect(() => {
         </section>
 
         {/* Skills */}
-        <section id="skills" className="scroll-mt-24 mx-auto max-w-7xl px-6 py-24 lg:px-8">
+        <section id="skills" className="scroll-mt-24 mx-auto max-w-7xl px-6 py-24 lg:px-8" >
           <div className="mb-12">
             <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-blue-400">
               My Toolkit
@@ -466,20 +670,62 @@ useEffect(() => {
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {skills.map((skill) => (
-              <div
-                key={skill.name}
-                className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition hover:-translate-y-1 hover:border-blue-500/50 hover:bg-slate-900"
-              >
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 transition group-hover:bg-blue-500 group-hover:text-white">
-                  <Code2 size={22} />
-                </div>
-                <h3 className="font-semibold text-slate-100">{skill.name}</h3>
-                <p className="mt-2 text-sm text-slate-500">{skill.level}</p>
+          {skillsLoading ? (
+  <div className="py-8 text-slate-400">
+    Loading skills...
+  </div>
+) : skillsError ? (
+  <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5 text-sm text-red-300">
+    {skillsError}
+  </div>
+) : skills.length === 0 ? (
+  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-slate-400">
+    Skills will appear here when they are published.
+  </div>
+) : (
+  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {skills.map((skill) => (
+      <div
+        key={skill.id}
+        className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition hover:-translate-y-1 hover:border-blue-500/50 hover:bg-slate-900"
+      >
+        <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 transition group-hover:bg-blue-500 group-hover:text-white">
+          <Code2 size={22} />
+        </div>
+
+        <h3 className="font-semibold text-slate-100">
+          {skill.name}
+        </h3>
+
+        <p className="mt-2 text-sm text-slate-500">
+          {skill.category}
+        </p>
+
+        {skill.proficiency !== null &&
+          skill.proficiency !== undefined && (
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
+                <span>Proficiency</span>
+                <span>{skill.proficiency}%</span>
               </div>
-            ))}
-          </div>
+
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(0, Number(skill.proficiency) || 0)
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+      </div>
+    ))}
+  </div>
+)}
 
           {/* Certificates & credentials */}
           <div className="mt-20 border-t border-slate-800 pt-12">
@@ -712,12 +958,72 @@ useEffect(() => {
               Let's connect.
             </p>
 
-            <a
-              href="mailto:your-email@example.com"
+            <button
               className="mt-8 inline-flex items-center gap-2 rounded-xl bg-blue-500 px-7 py-3.5 font-semibold text-white transition hover:bg-blue-600"
             >
-              Send Me an Email <ArrowRight size={18} />
-            </a>
+              Send Me an Email <ArrowDown size={18} />
+            </button>
+
+            <div className="mt-8 flex flex-wrap justify-center gap-4">
+  <a
+    href="https://wa.me/250795881016"
+    target="_blank"
+    rel="noreferrer"
+    aria-label="Contact me on WhatsApp"
+    className="inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 font-semibold text-white transition hover:bg-green-600"
+  >
+    <MessageCircle size={20} />
+    WhatsApp
+  </a>
+
+  <a
+    href="https://www.instagram.com/mpano.i/"
+    target="_blank"
+    rel="noreferrer"
+    aria-label="Visit my Instagram"
+    className="inline-flex items-center gap-2 rounded-xl border border-pink-500/40 px-5 py-3 font-semibold text-pink-300 transition hover:bg-pink-500/10"
+  >
+    
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width={20}
+  height={20}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  strokeWidth={2}
+  strokeLinecap="round"
+  strokeLinejoin="round"
+>
+  <rect x={3} y={3} width={18} height={18} rx={5} />
+  <circle cx={12} cy={12} r={4} />
+  <circle cx={18} cy={6} r={0.8} fill="currentColor" />
+</svg>
+
+    Instagram
+  </a>
+
+  <a
+    href="https://github.com/impjanvier2"
+    target="_blank"
+    rel="noreferrer"
+    aria-label="Visit my GitHub"
+    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
+  >
+    <Code2 size={20} />
+    GitHub
+  </a>
+
+  <a
+    href="mailto:impjanvier20@gmail.com"
+    aria-label="Send me an email"
+    className="inline-flex items-center gap-2 rounded-xl border border-blue-500/40 px-5 py-3 font-semibold text-blue-300 transition hover:bg-blue-500/10"
+  >
+    <Mail size={20} />
+    Email
+  </a>
+</div>
+
           </div>
         </section>
       </main>
